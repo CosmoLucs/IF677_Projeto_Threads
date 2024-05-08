@@ -17,15 +17,16 @@ void *lerArquivoThread(void *FileName) {
     }
 
     char linha[Tam_Max];
-    int contador = 0;
+    int *contador = (int *) malloc(sizeof(int));
     while (fgets(linha, sizeof(linha), arquivo) != NULL) {
         if (strstr(linha, NOME) != NULL) { 
-            contador++;
+            (*contador)++;
         }
     }
 
     // Fecha o arquivo
     fclose(arquivo);
+    //printf("%d nesse arquivo ", *contador);
 
     pthread_exit((void *) contador);
 }
@@ -36,13 +37,13 @@ int main() {
     int totalOcorrencias = 0;
 
     // Cria uma thread para cada arquivo
-    for (int i = 0; i < sizeof(arquivos) / sizeof(arquivos[0]); ++i) {
+    for (int i = 0; i < 3; ++i) {
         pthread_create(&threads[i], NULL, lerArquivoThread, (void *)arquivos[i]);
     }
 
     // Aguarda até que todas as threads tenham terminado e soma as ocorrências
-    for (int i = 0; i < 3); ++i) {
-        int *resultado;
+    for (int i = 0; i < 3; i++) {
+        int *resultado = 0;
         pthread_join(threads[i], (void **)&resultado);
         if (resultado != NULL) {
             totalOcorrencias += *resultado;
@@ -51,7 +52,7 @@ int main() {
     }
 
     // Printa o total de ocorrências
-    printf("%d\n", totalOcorrencias);
+    printf("%d", totalOcorrencias);
 
     return 0;
 }
