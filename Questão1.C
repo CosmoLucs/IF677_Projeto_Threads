@@ -43,12 +43,12 @@ int main() {
     scanf(" %[^\n]", Pedro); 
     printf("%s\n", Pedro);
 
+    //colocando o nome buscado na struct
+    //lendo o nome de cada um dos arquivos
     for(int i=0; i<qtd; ++i){
-        //colocando o nome buscado na struct
         ArqList[i]->Caleb = (char*) malloc(strlen(Pedro)+1);
         strcpy(ArqList[i]->Caleb, Pedro);
         printf(" %s\n", ArqList[i]->Caleb);
-        //lendo o nome de cada um dos arquivos
         printf("Coloca o .txt no final do nome do arquivo\n");
         ArqList[i]->arq = (char *) malloc(sizeof(char)*Tam_Max);
         scanf(" %[^\n]", ArqList[i]->arq);
@@ -59,7 +59,7 @@ int main() {
     int totalOcorrencias = 0;
 
     // Cria uma thread para cada arquivo
-    for (int i = 0; i < qtd; ++i) {
+    for (int i = 0; i < qtd; ++i){
         pthread_create(&threads[i], NULL, lerArquivoThread, ArqList[i]);
     }
 
