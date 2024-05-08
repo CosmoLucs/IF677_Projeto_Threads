@@ -4,12 +4,14 @@
 #include <string.h>
 
 #define Tam_Max 100
-#define NOME "lucas"
 
 struct Arquivo{
     char* Caleb;
     char* arq;
 };
+
+pthread_mutex_t mutex;
+int Nnomes;
 
 void *lerArquivoThread(void *FileName) {
     //Usar const pra não haver alteração
@@ -22,59 +24,50 @@ void *lerArquivoThread(void *FileName) {
     }
 
     char linha[Tam_Max];
-    int *contador = (int *) malloc(sizeof(int));
     while (fgets(linha, sizeof(linha), arquivo) != NULL) {
         if (strstr(linha, sapato->Caleb) != NULL) { 
-            (*contador)++;
+            pthread_mutex_lock(&mutex);
+            Nnomes++;
+            pthread_mutex_unlock(&mutex);
         }
     }
 
     // Fecha o arquivo
     fclose(arquivo);
-    printf("%d nesse arquivo \n", *contador);
-
-    pthread_exit((void *) contador);
+    pthread_exit(NULL);
 }
 
 int main() {
-    int qtd = scanf("%d", &qtd);
+    int qtd;
+    scanf("%d", &qtd);
     char *Pedro = (char*) malloc(sizeof(char)*Tam_Max); 
     struct Arquivo *ArqList[qtd];
     scanf(" %[^\n]", Pedro); 
-    printf("%s\n", Pedro);
 
     //colocando o nome buscado na struct
     //lendo o nome de cada um dos arquivos
     for(int i=0; i<qtd; ++i){
+        ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo));
         ArqList[i]->Caleb = (char*) malloc(strlen(Pedro)+1);
         strcpy(ArqList[i]->Caleb, Pedro);
-        printf(" %s\n", ArqList[i]->Caleb);
-        printf("Coloca o .txt no final do nome do arquivo\n");
+        printf("Digite o nome de um arquivo e coloque o .txt no final do nome do arquivo\n");
         ArqList[i]->arq = (char *) malloc(sizeof(char)*Tam_Max);
         scanf(" %[^\n]", ArqList[i]->arq);
-        printf(" %s\n", ArqList[i]->arq);
     }
 
     pthread_t threads[qtd];
-    int totalOcorrencias = 0;
 
     // Cria uma thread para cada arquivo
     for (int i = 0; i < qtd; ++i){
+        pthread_mutex_init(&mutex, NULL);
         pthread_create(&threads[i], NULL, lerArquivoThread, ArqList[i]);
+        pthread_join(threads[i], NULL);
+        pthread_mutex_destroy(&mutex);
     }
 
-    // Aguarda até que todas as threads tenham terminado e soma as ocorrências
-    for (int i = 0; i < qtd; i++) {
-        int *resultado = 0;
-        pthread_join(threads[i], (void **)&resultado);
-        if (resultado != NULL) {
-            totalOcorrencias += *resultado;
-            free(resultado);
-        }
-    }
 
     // Printa o total de ocorrências
-    printf("%d\n", totalOcorrencias);
+    printf("%d\n", Nnomes);
 
     return 0;
 }
