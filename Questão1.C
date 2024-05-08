@@ -4,7 +4,6 @@
 #include <string.h>
 
 #define Tam_Max 100
-#define NOME "lucas"
 
 struct Arquivo{
     char* Caleb;
@@ -31,28 +30,30 @@ void *lerArquivoThread(void *FileName) {
 
     // Fecha o arquivo
     fclose(arquivo);
-    printf("%d nesse arquivo \n", *contador);
+    //printf("%d nesse arquivo \n", *contador);
 
     pthread_exit((void *) contador);
 }
 
 int main() {
-    int qtd = scanf("%d", &qtd);
+    int qtd;
+    scanf("%d", &qtd);
     char *Pedro = (char*) malloc(sizeof(char)*Tam_Max); 
     struct Arquivo *ArqList[qtd];
     scanf(" %[^\n]", Pedro); 
-    printf("%s\n", Pedro);
+    //printf("%s\n", Pedro);
 
     //colocando o nome buscado na struct
     //lendo o nome de cada um dos arquivos
+    printf("Digite o nome e coloque o .txt no final do nome do arquivo\n");
     for(int i=0; i<qtd; ++i){
+        ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo));
         ArqList[i]->Caleb = (char*) malloc(strlen(Pedro)+1);
         strcpy(ArqList[i]->Caleb, Pedro);
-        printf(" %s\n", ArqList[i]->Caleb);
-        printf("Coloca o .txt no final do nome do arquivo\n");
+        //printf(" %s\n", ArqList[i]->Caleb);
         ArqList[i]->arq = (char *) malloc(sizeof(char)*Tam_Max);
         scanf(" %[^\n]", ArqList[i]->arq);
-        printf(" %s\n", ArqList[i]->arq);
+        //printf(" %s\n", ArqList[i]->arq);
     }
 
     pthread_t threads[qtd];
