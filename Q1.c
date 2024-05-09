@@ -38,37 +38,44 @@ void *lerArquivoThread(void *Files) {
     }
 
     //leitura e procura 
-    char linha[Tam_Max];
-    while (fgets(linha, sizeof(linha), ToReadFile) != NULL) {
-        if (strstr(linha, Temp->SearchName) != NULL) { 
+    char *linha = (char *) malloc(Tam_Max);
+    if(linha == NULL) {
+        pthread_exit(NULL);
+        exit(1);
+    }
+
+    while (fgets(linha, Tam_Max, ToReadFile) != NULL) {
+        while(strstr(linha, Temp->SearchName) != NULL) { 
             pthread_mutex_lock(&mutex);
             Nnomes++;
+            linha+=strlen(Temp->SearchName);
             pthread_mutex_unlock(&mutex);
         }
     }
 
-    // Fecha o arquivo e encerra a thread
+    // Fecha o arquivo, liberar memória e encerra a thread
     fclose(ToReadFile);
     pthread_exit(NULL);
 }
 
 int main() {
     int FileQtd;
-    printf("Digite a quantidade de arquivos que você deseja analisar:\n")
+    printf("Digite a quantidade de arquivos que você deseja analisar:\n");
     scanf("%d", &FileQtd);
 
     char *Pedro = (char*) malloc(sizeof(char)*Tam_Max); 
 
     struct Arquivo *ArqList[FileQtd];
-    printf("Digite a palavra que você está procurando nos arquivos:\n")
+    printf("Digite a palavra que você está procurando nos arquivos:\n");
     scanf(" %[^\n]", Pedro); 
 
-    //Alocação inicial da struct
-    ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo) * FileQtd);
 
     //colocando o nome buscado na struct
     //lendo o nome de cada um dos arquivos
     for(int i=0; i<FileQtd; ++i){
+        
+        //Alocação inicial da struct
+        ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo) * FileQtd);
         //Alocação de cada string.
         ArqList[i]->SearchName = (char*) malloc(strlen(Pedro)+1);
         ArqList[i]->FileName = (char *) malloc(sizeof(char)*Tam_Max);
