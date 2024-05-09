@@ -1,3 +1,12 @@
+//Projeto - Infra-Estrutura de Software - Projeto Threads
+//Questão 01 - status: Funcionando.
+
+//--------------------//----------------------
+
+/* Todos os arquivos ultilizados nessa questão
+possuem a mesma formatação, cada linha possui um
+único nome, escrito unicamente com letras minúsculas.*/
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,63 +14,83 @@
 
 #define Tam_Max 100
 
+//A Struct irá carregar a palavra qu será procurada e o nome do arquivo
 struct Arquivo{
-    char* Caleb;
-    char* arq;
+    char* SearchName;
+    char* FileName;
 };
 
+//Declaração global da mutex e da quantidade de nome encontrados
 pthread_mutex_t mutex;
 int Nnomes;
 
-void *lerArquivoThread(void *FileName) {
-    //Usar const pra não haver alteração
-    struct Arquivo *sapato = (struct Arquivo *) FileName;
+//Função para leitura do arquivo
+void *lerArquivoThread(void *Files) {
 
-    FILE *arquivo = fopen(sapato->arq, "r");
-    if (arquivo == NULL) {
+    //Boa prática de variável temporária
+    struct Arquivo *Temp = (struct Arquivo *) Files;
+
+    //inicialização do arquivo
+    FILE *ToReadFile = fopen(Temp->FileName, "r");
+    if (ToReadFile == NULL) {
         pthread_exit(NULL);
         exit(1);
     }
 
+    //leitura e procura 
     char linha[Tam_Max];
-    while (fgets(linha, sizeof(linha), arquivo) != NULL) {
-        if (strstr(linha, sapato->Caleb) != NULL) { 
+    while (fgets(linha, sizeof(linha), ToReadFile) != NULL) {
+        if (strstr(linha, Temp->SearchName) != NULL) { 
             pthread_mutex_lock(&mutex);
             Nnomes++;
             pthread_mutex_unlock(&mutex);
         }
     }
 
-    // Fecha o arquivo
-    fclose(arquivo);
+    // Fecha o arquivo e encerra a thread
+    fclose(ToReadFile);
     pthread_exit(NULL);
 }
 
 int main() {
-    int qtd;
-    scanf("%d", &qtd);
+    int FileQtd;
+    printf("Digite a quantidade de arquivos que você deseja analisar:\n")
+    scanf("%d", &FileQtd);
+
     char *Pedro = (char*) malloc(sizeof(char)*Tam_Max); 
-    struct Arquivo *ArqList[qtd];
+
+    struct Arquivo *ArqList[FileQtd];
+    printf("Digite a palavra que você está procurando nos arquivos:\n")
     scanf(" %[^\n]", Pedro); 
+
+    //Alocação inicial da struct
+    ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo) * FileQtd);
 
     //colocando o nome buscado na struct
     //lendo o nome de cada um dos arquivos
-    for(int i=0; i<qtd; ++i){
-        ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo));
-        ArqList[i]->Caleb = (char*) malloc(strlen(Pedro)+1);
-        strcpy(ArqList[i]->Caleb, Pedro);
-        printf("Digite o nome de um arquivo e coloque o .txt no final do nome do arquivo\n");
-        ArqList[i]->arq = (char *) malloc(sizeof(char)*Tam_Max);
-        scanf(" %[^\n]", ArqList[i]->arq);
+    for(int i=0; i<FileQtd; ++i){
+        //Alocação de cada string.
+        ArqList[i]->SearchName = (char*) malloc(strlen(Pedro)+1);
+        ArqList[i]->FileName = (char *) malloc(sizeof(char)*Tam_Max);
+
+        //Todas as instâncias da struct irão procurar pela mesma palavra.
+        strcpy(ArqList[i]->SearchName, Pedro);
+
+        printf("Digite o nome de um arquivo(lembresse de adicionar '.txt' ao final):\n");
+        scanf(" %[^\n]", ArqList[i]->FileName);
     }
 
-    pthread_t threads[qtd];
+    //criação das threads
+    pthread_t threads[FileQtd];
 
     // Cria uma thread para cada arquivo
-    for (int i = 0; i < qtd; ++i){
+    for (int i = 0; i < FileQtd; ++i){
+        //inicialização do mutex para controle
         pthread_mutex_init(&mutex, NULL);
+
         pthread_create(&threads[i], NULL, lerArquivoThread, ArqList[i]);
         pthread_join(threads[i], NULL);
+
         pthread_mutex_destroy(&mutex);
     }
 
