@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+//=================================================================
+
+//#include "heap.h"
+
 typedef struct minHeap{
     int *vetor;
     int size, cnt;
@@ -16,30 +20,30 @@ void _minHeapfyBot(minHeap* H);
 void _minHeapInserir(minHeap* H, int value);
 int _minHeapPop(minHeap* H);
 
+// int main(){
+//     int tam;
+//     int valor;
+//     scanf("%d", &tam);
+//     do{
+//         if(tam!=0){
+//             minHeap* vet = _minHeapCreate(tam);
+//             for(int i=0; i<tam; i++){
+//                 scanf("%d", &valor);
+//                 _minHeapInserir(vet, valor);
+//             }
+//             _minHeapfyBot(vet);
 
-int main(){
-    int tam;
-    int valor;
-    scanf("%d", &tam);
-    do{
-        if(tam!=0){
-            minHeap* vet = _minHeapCreate(tam);
-            for(int i=0; i<tam; i++){
-                scanf("%d", &valor);
-                _minHeapInserir(vet, valor);
-            }
-            _minHeapfyBot(vet);
+//             for(int i=1; i<=tam; i++)
+//                 printf("%d", vet->vetor[i]);
+//             printf("\n");
 
-            for(int i=1; i<=tam; i++)
-                printf("%d", vet->vetor[i]);
-            printf("\n");
+//             for(int i=0; i<tam; i++)
+//                 printf("%d", _minHeapPop(vet));
+//             printf("\n");
+//         }
+//     }while(tam!=0);
+// }
 
-            for(int i=0; i<tam; i++)
-                printf("%d", _minHeapPop(vet));
-            printf("\n");
-        }
-    }while(tam!=0);
-}
 
 minHeap* _minHeapCreate(int size){
     minHeap *H = (minHeap*)malloc(sizeof(minHeap));
@@ -98,7 +102,15 @@ void _minHeapfyBot(minHeap* H){
 void _minHeapInserir(minHeap* H, int value){
     if(H->size == H->cnt){
         //alocar mais memoria
-        return;
+        minHeap* newH = (minHeap*)malloc(sizeof(minHeap)*2*H->size);
+        newH->cnt = H->cnt;
+        newH->size = H->size;
+        for(int i=0; i<H->size; i++){
+            newH->vetor[i] = H->vetor[i];
+        }
+        free(H->vetor);
+        free(H);
+        H = newH;
     }
     H->cnt++;
     H->vetor[H->cnt] = value;

@@ -72,7 +72,7 @@ void *sortThread(void *arg){
     int ultimo=__INT_MAX__;
     for(int j=0; j<info[0].tamSub && k<info[0].vetorInfo->tam; j++){
         for(int i=0; i<info[0].nThreads; i++){
-            int subI=info[i].begin+j;
+            int subI=info[i].begin+j; 
             //int subF=info[i].end;
             //o ultimo adicionado eh maior do que o atual //trocam de pos
             if(ultimo > info[i].Subarray[subI]){
