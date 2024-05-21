@@ -4,46 +4,9 @@
 
 //=================================================================
 
-//#include "heap.h"
+#include "heap.h"
 
-typedef struct minHeap{
-    int *vetor;
-    int size, cnt;
-} minHeap;
-
-minHeap* _minHeapCreate(int size);
-minHeap* _minHeapDestroy(minHeap* H);
-
-void _minHeapfyTop(minHeap* H);
-void _minHeapfyBot(minHeap* H);
-
-void _minHeapInserir(minHeap* H, int value);
-int _minHeapPop(minHeap* H);
-
-// int main(){
-//     int tam;
-//     int valor;
-//     scanf("%d", &tam);
-//     do{
-//         if(tam!=0){
-//             minHeap* vet = _minHeapCreate(tam);
-//             for(int i=0; i<tam; i++){
-//                 scanf("%d", &valor);
-//                 _minHeapInserir(vet, valor);
-//             }
-//             _minHeapfyBot(vet);
-
-//             for(int i=1; i<=tam; i++)
-//                 printf("%d", vet->vetor[i]);
-//             printf("\n");
-
-//             for(int i=0; i<tam; i++)
-//                 printf("%d", _minHeapPop(vet));
-//             printf("\n");
-//         }
-//     }while(tam!=0);
-// }
-
+//=================================================================
 
 minHeap* _minHeapCreate(int size){
     minHeap *H = (minHeap*)malloc(sizeof(minHeap));
@@ -126,3 +89,28 @@ int _minHeapPop(minHeap* H){
     _minHeapfyTop(H);
     return sub;
 }
+
+
+// int main(){
+//     int tam;
+//     int valor;
+//     scanf("%d", &tam);
+//     do{
+//         if(tam!=0){
+//             minHeap* vet = _minHeapCreate(tam);
+//             for(int i=0; i<tam; i++){
+//                 scanf("%d", &valor);
+//                 _minHeapInserir(vet, valor);
+//             }
+//             _minHeapfyBot(vet);
+
+//             for(int i=1; i<=tam; i++)
+//                 printf("%d", vet->vetor[i]);
+//             printf("\n");
+
+//             for(int i=0; i<tam; i++)
+//                 printf("%d", _minHeapPop(vet));
+//             printf("\n");
+//         }
+//     }while(tam!=0);
+// }
