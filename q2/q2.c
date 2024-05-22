@@ -131,7 +131,7 @@ void *sortThread(void *arg){
     struct threadInfo *info = (struct threadInfo*) arg;
     //comparar qual o menor valor em determinada posição de cada subArray
     //colocá-los no "novo" array de maneira crescente
-    //fazer isso com cada posicão
+    //fazer isso com cada posicão 
     int tamSub = info[0].tamSub;
     int tamVet = info[0].vetInfo->tam;
     int nThreads = info[0].nThreads;
@@ -142,7 +142,7 @@ void *sortThread(void *arg){
         //procura o menor entre os subArrays
         for(int i=0; i<nThreads; i++){
             //comparar qual o menor valor em uma posição de cada subArray
-            int ind1 = info[i].begin;
+            int ind1 = info[i].begin; 
             if(ind1 == info[i].end){
                 //nada
             }
