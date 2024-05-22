@@ -5,13 +5,6 @@
 #include <stdbool.h>
 #include <math.h>
 
-//====================================================
-#include "heap.h"
-//====================================================
-
-/*
-Nthreads é o N, a quantidade de threads e a quantidade que vai particionar o array.
-*/
 
 pthread_barrier_t barreira;
 
@@ -32,8 +25,6 @@ struct threadInfo{
 
 void *bubbleThread(void *arg);
 void *sortThread(void *arg);
-
-void *sort2Thread(void* arg);
 
 //====================================================
 
@@ -84,11 +75,20 @@ int main(){
     //barreira finalizada
     pthread_barrier_destroy(&barreira);
 
+    //printando os subArrays
+    for(int t=0; t<Nthreads; t++){
+        for(int i=threadArg[t].begin; i<threadArg[t].end; i++){
+            printf("%d ", threadArg[t].subArray[i]);
+        }
+    }
+    printf("\n");
+
+
     //sincronizando a main e o sort
     pthread_barrier_init(&barreira, NULL, 2);
     //thread que junta tudo 
     pthread_t threadSort;
-    pthread_create(&threadSort, NULL, sort2Thread, (void*) &threadArg);
+    pthread_create(&threadSort, NULL, sortThread, (void*) &threadArg);
 
     pthread_barrier_wait(&barreira);
     pthread_barrier_destroy(&barreira);
@@ -132,132 +132,35 @@ void *sortThread(void *arg){
     //comparar qual o menor valor em determinada posição de cada subArray
     //colocá-los no "novo" array de maneira crescente
     //fazer isso com cada posicão
-
-    int k=1;
-    int ultimo=__INT_MAX__;
-    for(int j=0; j<info[0].tamSub && k<info[0].vetInfo->tam; j++){
-        for(int i=0; i<info[0].nThreads; i++){
-            int subI=info[i].begin+j; 
-            //int subF=info[i].end;
-            //o ultimo adicionado eh maior do que o atual //trocam de pos
-            if(ultimo > info[i].subArray[subI]){
-                //a pos anterior recebe o atual
-                info[i].vetInfo->array[k-1] = info[i].subArray[subI];
-                //a pos atual recebe o ultimo
-                info[i].vetInfo->array[k] = ultimo;
-                //o atual vira o novo ultimo
-                ultimo = info[i].subArray[subI];
-                k++;
+    int tamSub = info[0].tamSub;
+    int tamVet = info[0].vetInfo->tam;
+    int nThreads = info[0].nThreads;
+    int novoArray[tamVet];
+    for(int k=0; k<tamVet; k++){
+        int escolhido = __INT_MAX__;
+        int indEscolhido = 0;
+        //procura o menor entre os subArrays
+        for(int i=0; i<nThreads; i++){
+            //comparar qual o menor valor em uma posição de cada subArray
+            int ind1 = info[i].begin;
+            if(ind1 == info[i].end){
+                //nada
             }
-            //o ultimo nao é maior ent só adiciona o valor atual na pos atual
-            else {
-                info[i].vetInfo->array[k] = info[i].subArray[subI];
-                k++;
+            else if(escolhido > info[i].vetInfo->array[ind1]){
+                escolhido = info[i].vetInfo->array[ind1];
+                indEscolhido = i;
             }
         }
+        //colocando o valor escolhido
+        novoArray[k] = escolhido;
+        info[indEscolhido].begin++;
     }
 
-    pthread_exit(NULL);
-}
-
-//====================================================
-
-void *sort2Thread(void* arg){
-    struct threadInfo *info = (struct threadInfo*) arg;
-    //comparar qual o menor valor em determinada posição de cada subArray
-    //colocá-los no "novo" array de maneira crescente
-    //fazer isso com cada posicão
-    //usar uma heap?
-
-    int k=0;
-    minHeap *heap = _minHeapCreate(info[0].vetInfo->tam);
-    for(int i=0; i<info[0].tamSub; i++){
-        for(int j=0; j<info[0].nThreads; j++){
-            int subI = info[j].begin+i; 
-            _minHeapInserir(heap, info[j].subArray[subI]); 
-        }
-        for(int j=0; j<info[0].nThreads; j++){
-            info[0].vetInfo->array[k] = _minHeapPop(heap); 
-            k++; 
-        }
+    for(int i=0; i<tamVet; i++){
+        info[0].vetInfo->array[i] = novoArray[i];
     }
-    heap = _minHeapDestroy(heap);
+
     pthread_barrier_wait(&barreira);
     pthread_exit(NULL);
 }
 
-//====================================================
-
-minHeap* _minHeapCreate(int size){
-    minHeap *H = (minHeap*)malloc(sizeof(minHeap));
-    H->vetor = (int*)malloc(sizeof(int)*size+1);
-    H->cnt=0;
-    H->size=size;
-    return H;
-}
-minHeap* _minHeapDestroy(minHeap* H){
-    free(H->vetor);
-    free(H);
-    return H;
-}
-
-void _minHeapfyTop(minHeap* H){
-    if(H->cnt/2 >= 1){
-        int k=1;
-        int v = H->vetor[k];
-        bool heap = false;
-        while(!heap && 2*k <= H->cnt){
-            int j=2*k;
-            if(j<H->cnt)
-                if(H->vetor[j] > H->vetor[j+1])
-                    j=j+1;
-            if(v <= H->vetor[j])
-                heap = true;
-            else{
-                H->vetor[k] = H->vetor[j];
-                k = j;
-            }
-            H->vetor[k] = v;
-        }
-    }
-}
-void _minHeapfyBot(minHeap* H){
-    for(int i = H->cnt/2; i>=1; i--){
-        int k = i;
-        int v = H->vetor[k];
-        bool heap = false;
-        while(!heap && 2*k <= H->cnt){
-            int j=2*k;
-            if(j<H->cnt)
-                if(H->vetor[j] > H->vetor[j+1])
-                    j++;
-            if(v <= H->vetor[j])
-                heap = true;
-            else{
-                H->vetor[k] = H->vetor[j];
-                k =j;
-            }
-            H->vetor[k] = v;
-        }
-    }
-}
-
-void _minHeapInserir(minHeap* H, int value){
-    if(H->size == H->cnt){
-        //alocar mais memoria
-        return;
-    }
-    H->cnt++;
-    H->vetor[H->cnt] = value;
-}
-int _minHeapPop(minHeap* H){
-    if(H->cnt==0) return 0;
-
-    int sub = H->vetor[1];
-    H->vetor[1] = H->vetor[H->cnt];
-    H->vetor[H->cnt] = sub;
-
-    H->cnt--;
-    _minHeapfyTop(H);
-    return sub;
-}
