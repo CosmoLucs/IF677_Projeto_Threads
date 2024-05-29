@@ -66,36 +66,77 @@ OBS: usar duas barreiras.
 pthread_barrier_t barreiraCalculo;
 pthread_barrier_t barreiraEscrita;
 
-typedef struct sistLinear {
-    int k;
-    int P;
-    int tamLinhas, tamColunas;
+typedef struct matrizes{
+    int tamLinhas, tamColunas; //sao iguais sempre
     float** A;
     float* b;
     float* x;
     float* xAux;
+}matrizes;
+
+typedef struct sistLinear {
+    int k;
+    int P;
+    matrizes dados; 
 }sistLinear;
 
 typedef struct infoThread{
     int id;
-    sistLinear* infoSL;
+    int numJacobi;
+    sistLinear sistema;
 } infoThread;
+
+//===========================================================================
+
+void recebendoDados(sistLinear* arg){
+    scanf("%d %d", &arg->dados.tamLinhas, &arg->dados.tamColunas);
+    arg->dados.A = (float**)malloc(sizeof(float*)*arg->dados.tamLinhas);
+    for(int i=0; i<arg->dados.tamLinhas; i++){
+        arg->dados.A[i] = (float*)malloc(sizeof(float)*arg->dados.tamColunas);
+        for(int j=0; j<arg->dados.tamColunas; j++)
+            scanf("%f", &arg->dados.A[i][j]);
+    }
+    arg->dados.b = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
+    for(int i=0; i<arg->dados.tamLinhas; i++)
+        scanf("%f", &arg->dados.b[i]);
+    //vetor x e xAux
+    arg->dados.x = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
+    arg->dados.x = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
+}
+
+void printandoDados(sistLinear* arg){
+    printf("Dados do Sistema Linear\n");
+    printf("Matriz A de coeficientes\n");
+    for(int i=0; i<arg->dados.tamColunas; i++){
+        for(int j=0; j<arg->dados.tamColunas; j++)
+            printf("%f ", arg->dados.A[i][j]);
+        printf("\n");
+    }
+    printf("Vetor b\n");
+    for(int i=0; i<arg->dados.tamLinhas; i++)
+        printf("%f ", arg->dados.b[i]);
+    printf("Resultado do vetor X com %d iteracoes\n", arg->P);
+    for(int i=0; i<arg->dados.tamLinhas; i++)
+        printf("x[%d]: %f\n", i, arg->dados.x[i]);
+}
+
+//===========================================================================
 
 
 //melhorar//talvez tenha algum erro
 void* JacobiThread(void* arg){
     infoThread info = (*(infoThread*) arg);
-    while(info.infoSL->k < info.infoSL->P){
-        for(int i=0; i<info.infoSL->tamLinhas; i++){
-            int somatorio_a_x = 0; 
-            for(int j=0; j<info.infoSL->tamLinhas; i++){
-                if(j!=i) somatorio_a_x += info.infoSL->A[i][j] * info.infoSL->x[j];
-            }
-            info.infoSL->xAux[i] = 1/info.infoSL->A[i][i] * info.infoSL->b[i] - somatorio_a_x;
-            pthread_barrier_wait(&barreiraCalculo);
-            pthread_barrier_wait(&barreiraEscrita);
+    int i = info.numJacobi;
+    while(info.sistema.k < info.sistema.P){ 
+        //------------------------------------------------------
+        int somatorio_a_x = 0; 
+        for(int j=0; j<info.sistema.dados.tamLinhas; j++){
+            if(j!=i) somatorio_a_x += info.sistema.dados.A[i][j] * info.sistema.dados.x[0]; ///----------------*
         }
-        
+        info.sistema.dados.xAux[0] = 1/info.sistema.dados.A[i][i] * info.sistema.dados.b[i] - somatorio_a_x; ///------------*
+        pthread_barrier_wait(&barreiraCalculo);
+        pthread_barrier_wait(&barreiraEscrita);
+        //------------------------------------------------------   
     }
     pthread_exit(NULL);
 }
@@ -104,49 +145,47 @@ void* JacobiThread(void* arg){
 int main(){
     sistLinear matrizes;
 
-    //recebendo dados
-    scanf("%d %d", &matrizes.tamLinhas, &matrizes.tamColunas);
-    matrizes.A = (int**)malloc(sizeof(int*)*matrizes.tamLinhas);
-    for(int i=0; i<matrizes.tamLinhas; i++){
-        matrizes.A[i] = (int*)malloc(sizeof(int)*matrizes.tamColunas);
-        for(int j=0; j<matrizes.tamColunas; j++)
-            scanf("%d", &matrizes.A[i][j]);
-    }
-    matrizes.b = (int*)malloc(sizeof(int)*matrizes.tamLinhas);
-    for(int i=0; i<matrizes.tamLinhas; i++)
-        scanf("%d", &matrizes.b);
-    //vetor x
-    matrizes.x = (int*)malloc(sizeof(int)*matrizes.tamLinhas);
-    
+    recebendoDados(&matrizes);
 
-    pthread_barrier_init(&barreiraCalculo, NULL, matrizes.tamLinhas+1);
-    pthread_barrier_init(&barreiraEscrita, NULL, matrizes.tamLinhas+1);
+    pthread_barrier_init(&barreiraCalculo, NULL, matrizes.dados.tamLinhas+1);
+    pthread_barrier_init(&barreiraEscrita, NULL, matrizes.dados.tamLinhas+1);
 
-    //inicializando threads
-    pthread_t threads[matrizes.tamLinhas];
-    infoThread info[matrizes.tamLinhas];
-    for(int i=0; i<matrizes.tamLinhas; i++){
-        info[i].id = i;
-        info[i].infoSL = &matrizes;
+    //inicializando threads 
+    pthread_t threads[matrizes.dados.tamLinhas]; 
+    infoThread info[matrizes.dados.tamLinhas]; 
+    for(int i=0; i<matrizes.dados.tamLinhas; i++){ 
+        info[i].id = i; 
+        info[i].numJacobi = i;
+        info[i].sistema.k = matrizes.k;
+        info[i].sistema.P = matrizes.P;
+        info[i].sistema.dados.A = matrizes.dados.A;
+        info[i].sistema.dados.b = matrizes.dados.b;
+        info[i].sistema.dados.x = &matrizes.dados.x[i];
+        info[i].sistema.dados.xAux = &matrizes.dados.xAux[i];
+        pthread_create(&threads[i], NULL, JacobiThread, (void*) &info[i]);
     }
 
     //atualizando o vetor x e o k
     while(matrizes.k < matrizes.P){
         pthread_barrier_wait(&barreiraCalculo);
-        //
+        //passando todas as mudanças
+        matrizes.dados.x = matrizes.dados.xAux;
         matrizes.k++;
         pthread_barrier_wait(&barreiraEscrita);
     }
+
+    //printando os valores do xFinal
+    printandoDados(&matrizes);
 
     //liberando barreira
     pthread_barrier_destroy(&barreiraCalculo);
     pthread_barrier_destroy(&barreiraEscrita);
     //DESACOLANDO MEMÓRIA 
-    free(matrizes.b);
-    free(matrizes.x);
-    for(int i=0; i<matrizes.tamLinhas; i++)
-        free(matrizes.A[i]);
-    free(matrizes.A);
+    free(matrizes.dados.b);
+    free(matrizes.dados.x);
+    for(int i=0; i<matrizes.dados.tamLinhas; i++)
+        free(matrizes.dados.A[i]);
+    free(matrizes.dados.A);
 
     return 0;
 }
