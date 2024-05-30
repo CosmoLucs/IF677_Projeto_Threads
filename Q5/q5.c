@@ -57,6 +57,8 @@ calculadas. Barriers é uma excelente ferramenta para essa questão.
 
 OBS: usar duas barreiras. 
 */
+
+//está dando segmentation fault...
 #define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,6 +91,7 @@ typedef struct infoThread{
 //===========================================================================
 
 void recebendoDados(sistLinear* arg){
+    scanf("%d", &arg->P);
     scanf("%d %d", &arg->dados.tamLinhas, &arg->dados.tamColunas);
     arg->dados.A = (float**)malloc(sizeof(float*)*arg->dados.tamLinhas);
     for(int i=0; i<arg->dados.tamLinhas; i++){
