@@ -58,7 +58,8 @@ calculadas. Barriers é uma excelente ferramenta para essa questão.
 OBS: usar duas barreiras. 
 */
 
-//está dando segmentation fault...
+//está dando segmentation fault...e parando por algum motivo...
+//alem de calcular errado
 #define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,7 +86,7 @@ typedef struct sistLinear {
 typedef struct infoThread{
     int id;
     int numJacobi;
-    sistLinear sistema;
+    sistLinear *sistema;
 } infoThread;
 
 //===========================================================================
@@ -104,7 +105,7 @@ void recebendoDados(sistLinear* arg){
         scanf("%f", &arg->dados.b[i]);
     //vetor x e xAux
     arg->dados.x = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
-    arg->dados.x = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
+    arg->dados.xAux = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
 }
 
 void printandoDados(sistLinear* arg){
@@ -118,9 +119,11 @@ void printandoDados(sistLinear* arg){
     printf("Vetor b\n");
     for(int i=0; i<arg->dados.tamLinhas; i++)
         printf("%f ", arg->dados.b[i]);
+    printf("\n");
     printf("Resultado do vetor X com %d iteracoes\n", arg->P);
     for(int i=0; i<arg->dados.tamLinhas; i++)
         printf("x[%d]: %f\n", i, arg->dados.x[i]);
+    //printf("\n");
 }
 
 //===========================================================================
@@ -129,17 +132,17 @@ void printandoDados(sistLinear* arg){
 //melhorar//talvez tenha algum erro
 void* JacobiThread(void* arg){
     infoThread info = (*(infoThread*) arg);
-    int i = info.numJacobi;
-    while(info.sistema.k < info.sistema.P){ 
+    int i = info.numJacobi; 
+    while(info.sistema->k < info.sistema->P){ 
         //------------------------------------------------------
-        int somatorio_a_x = 0; 
-        for(int j=0; j<info.sistema.dados.tamLinhas; j++){
-            if(j!=i) somatorio_a_x += info.sistema.dados.A[i][j] * info.sistema.dados.x[0]; ///----------------*
+        int somatorio_a_x = 0;
+        for(int j=0; j<info.sistema->dados.tamLinhas; j++){
+            if(j!=i) somatorio_a_x += info.sistema->dados.A[i][j] * info.sistema->dados.x[i]; ///----------------*
         }
-        info.sistema.dados.xAux[0] = 1/info.sistema.dados.A[i][i] * info.sistema.dados.b[i] - somatorio_a_x; ///------------*
+        info.sistema->dados.xAux[i] = 1/info.sistema->dados.A[i][i] * info.sistema->dados.b[i] - somatorio_a_x; ///------------*
         pthread_barrier_wait(&barreiraCalculo);
         pthread_barrier_wait(&barreiraEscrita);
-        //------------------------------------------------------   
+        //------------------------------------------------------ 
     }
     pthread_exit(NULL);
 }
@@ -159,12 +162,7 @@ int main(){
     for(int i=0; i<matrizes.dados.tamLinhas; i++){ 
         info[i].id = i; 
         info[i].numJacobi = i;
-        info[i].sistema.k = matrizes.k;
-        info[i].sistema.P = matrizes.P;
-        info[i].sistema.dados.A = matrizes.dados.A;
-        info[i].sistema.dados.b = matrizes.dados.b;
-        info[i].sistema.dados.x = &matrizes.dados.x[i];
-        info[i].sistema.dados.xAux = &matrizes.dados.xAux[i];
+        info[i].sistema = &matrizes;
         pthread_create(&threads[i], NULL, JacobiThread, (void*) &info[i]);
     }
 
@@ -172,23 +170,26 @@ int main(){
     while(matrizes.k < matrizes.P){
         pthread_barrier_wait(&barreiraCalculo);
         //passando todas as mudanças
-        matrizes.dados.x = matrizes.dados.xAux;
+        for(int i=0; i<matrizes.dados.tamLinhas; i++)
+            matrizes.dados.x[i] = matrizes.dados.xAux[i];
         matrizes.k++;
         pthread_barrier_wait(&barreiraEscrita);
     }
 
-    //printando os valores do xFinal
-    printandoDados(&matrizes);
-
     //liberando barreira
     pthread_barrier_destroy(&barreiraCalculo);
     pthread_barrier_destroy(&barreiraEscrita);
+
+    //printando os valores do xFinal
+    printandoDados(&matrizes);
+
     //DESACOLANDO MEMÓRIA 
-    free(matrizes.dados.b);
+    free(matrizes.dados.xAux);
     free(matrizes.dados.x);
+    free(matrizes.dados.b);
     for(int i=0; i<matrizes.dados.tamLinhas; i++)
         free(matrizes.dados.A[i]);
     free(matrizes.dados.A);
 
-    return 0;
+    pthread_exit(NULL);
 }
