@@ -106,8 +106,6 @@ int main(){
     pthread_exit(NULL);
 }
 
-
-
 //====================================================
  
 void *bubbleThread(void *arg){
@@ -115,7 +113,7 @@ void *bubbleThread(void *arg){
     for(int i=info.begin; i<info.end; i++){
         for(int j=i; j<info.end-1; j++){
             if(info.subArray[j] > info.subArray[j+1]){
-                printf("Thread %d trocou\n", info.threadId);
+                //printf("Thread %d trocou\n", info.threadId);
                 int temp = info.subArray[j];
                 info.subArray[j] = info.subArray[j+1];
                 info.subArray[j+1] = temp;
