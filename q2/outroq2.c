@@ -48,7 +48,7 @@ int main(){
     //qtd de threads deve ser menor que a qtd de partições
     if(vetCoisas.tam < Nthreads) return 1;
 
-    pthread_barrier_init(&barreiraT, NULL, Nthreads+1);
+    pthread_barrier_init(&barreiraT, NULL, Nthreads);
 
     struct threadInfo thread[Nthreads];
     pthread_t threadVar[Nthreads];
@@ -75,15 +75,15 @@ int main(){
     pthread_barrier_wait(&barreiraT);
     pthread_barrier_destroy(&barreiraT);
     
-    //sincronizando a main e o sort
-    // pthread_barrier_init(&barreiraM, NULL, 2);
-    //thread que junta tudo
+    // sincronizando a main e o sort
+    pthread_barrier_init(&barreiraM, NULL, 1);
+    // thread que junta tudo
     pthread_t threadSort;
     pthread_create(&threadSort, NULL, sortThread, (void*) &thread);
     //pthread_join(threadSort, NULL);
 
-    // pthread_barrier_wait(&barreiraM);
-    // pthread_barrier_destroy(&barreiraM);
+    pthread_barrier_wait(&barreiraM);
+    pthread_barrier_destroy(&barreiraM);
 
     //array ordenado
     for(int i=0; i<vetCoisas.tam; i++)
