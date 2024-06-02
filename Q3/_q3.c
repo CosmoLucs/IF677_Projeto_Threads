@@ -1,16 +1,19 @@
 //andrey's version
+//ignore
 #define _XOPEN_SOURCE 600
 #include <pthread.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
 
-#define MAXclientes 100
+//===========================================================================
+
+#define MAXpedidos 100
  
 typedef struct {
     int id;
     int Money;
-    pthread_mutex_t mutex;
+    pthread_mutex_t mutex; 
 } Conta;
 
 typedef struct {
@@ -23,7 +26,12 @@ typedef struct {
 
 pthread_barrier_t barreira;
 
+
+//===========================================================================
+
 void* ResolveIsso(void *arg); 
+
+//===========================================================================
 
 int main (int argc, char *argv[]) { 
     int Ncliente, i;
@@ -35,12 +43,10 @@ int main (int argc, char *argv[]) {
     pthread_t Thread[Ncliente]; 
     Conta Pessoa[Ncliente]; 
 
-    for(int i=0; i<Ncliente; i++)
-        pthread_mutex_init(&Pessoa[i].mutex, NULL);
-
     pthread_barrier_init(&barreira, NULL, Ncliente+1); 
 
     for(i = 0; i < Ncliente; i++) {
+        pthread_mutex_init(&Pessoa[i].mutex, NULL);
         Pessoa[i].Money = 5;
         Pessoa[i].id = i; 
     }
@@ -98,10 +104,6 @@ int main (int argc, char *argv[]) {
         pthread_create(&Thread[i], NULL, ResolveIsso, &Info[i]);
     }
 
-    // for(i = 0; i < Ncliente; i++) {
-    //     pthread_join(Thread[i], NULL);
-    // }
-
     pthread_barrier_wait(&barreira);
     pthread_barrier_destroy(&barreira);
 
@@ -115,6 +117,8 @@ int main (int argc, char *argv[]) {
     pthread_exit(NULL);
 }
 
+//===========================================================================
+
 void *ResolveIsso(void *arg) { 
     ThreadInfo *Temp = (ThreadInfo *) arg; 
     printf("Thread %d iniciou\n", Temp->ThreadId);
@@ -126,7 +130,7 @@ void *ResolveIsso(void *arg) {
                 Temp->Zerada->Money += Temp->Qtd; 
                 pthread_mutex_unlock(&Temp->Zerada->mutex); 
                 printf("Conta %d: Deposito Realizado\n", Temp->Zerada->id);
-                break;
+                break; 
             case 2: 
                 pthread_mutex_lock(&Temp->Zerada->mutex);
                 if(Temp->Qtd > Temp->Zerada->Money) 
@@ -154,3 +158,5 @@ void *ResolveIsso(void *arg) {
     pthread_barrier_wait(&barreira);
     pthread_exit(NULL);
 }
+
+//===========================================================================
