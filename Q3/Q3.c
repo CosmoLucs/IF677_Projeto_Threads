@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdbool.h>
-
+ 
 typedef struct {
     int Money;
     int id;
