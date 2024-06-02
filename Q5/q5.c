@@ -66,6 +66,7 @@ OBS: usar duas barreiras.
 #include <pthread.h>
 #include <stdbool.h>
 
+
 pthread_barrier_t barreiraCalculo;
 pthread_barrier_t barreiraEscrita;
 
@@ -78,14 +79,14 @@ typedef struct matrizes{
 }matrizes;
 
 typedef struct sistLinear {
-    int k;
     int P;
     matrizes dados; 
 }sistLinear;
 
 typedef struct infoThread{
     int id;
-    int numJacobi;
+    int numJacobi; 
+    int k;
     sistLinear *sistema;
 } infoThread;
 
@@ -101,20 +102,52 @@ void recebendoDados(sistLinear* arg){
             scanf("%f", &arg->dados.A[i][j]);
     }
     arg->dados.b = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
-    for(int i=0; i<arg->dados.tamLinhas; i++)
-        scanf("%f", &arg->dados.b[i]);
-    //vetor x e xAux
-    arg->dados.x = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
-    arg->dados.xAux = (float*)malloc(sizeof(float)*arg->dados.tamLinhas);
+    for(int i=0; i<arg->dados.tamLinhas; i++) 
+        scanf("%f", &arg->dados.b[i]); 
+    //vetor x e xAux 
+    arg->dados.x = (float*)calloc(sizeof(float),arg->dados.tamLinhas);
+    arg->dados.xAux = (float*)calloc(sizeof(float),arg->dados.tamLinhas);
+
+    for (int i = 0; i < arg->dados.tamLinhas; i++) {
+        arg->dados.x[i] = 1.0;
+        arg->dados.xAux[i] = 1.0;
+    }
+}
+void recebendoConstantes(sistLinear* arg){
+    arg->P = 50; 
+    arg->dados.tamLinhas = 2; 
+    arg->dados.tamColunas = 2;
+
+    arg->dados.A = (float**)malloc(sizeof(float*) * arg->dados.tamLinhas);
+    for(int i = 0; i < arg->dados.tamLinhas; i++){
+        arg->dados.A[i] = (float*)malloc(sizeof(float) * arg->dados.tamColunas);
+    }
+    arg->dados.A[0][0] = 2.0;
+    arg->dados.A[0][1] = 1.0;
+    arg->dados.A[1][0] = 5.0;
+    arg->dados.A[1][1] = 7.0;
+
+    arg->dados.b = (float*)malloc(sizeof(float) * arg->dados.tamLinhas);
+    arg->dados.b[0] = 11.0;
+    arg->dados.b[1] = 13.0;
+
+    // vetor x e xAux 
+    arg->dados.x = (float*)calloc(sizeof(float), arg->dados.tamLinhas);
+    arg->dados.xAux = (float*)calloc(sizeof(float), arg->dados.tamLinhas);
+
+    for (int i = 0; i < arg->dados.tamLinhas; i++) {
+        arg->dados.x[i] = 1.0;
+        arg->dados.xAux[i] = 1.0;
+    }
 }
 
-void printandoDados(sistLinear* arg){
-    printf("Dados do Sistema Linear\n");
-    printf("Matriz A de coeficientes\n");
+void printandoDados(sistLinear* arg){ 
+    printf("Dados do Sistema Linear\n"); 
+    printf("Matriz A de coeficientes\n"); 
     for(int i=0; i<arg->dados.tamColunas; i++){
-        for(int j=0; j<arg->dados.tamColunas; j++)
-            printf("%f ", arg->dados.A[i][j]);
-        printf("\n");
+        for(int j=0; j<arg->dados.tamColunas; j++) 
+            printf("%f ", arg->dados.A[i][j]); 
+        printf("\n"); 
     }
     printf("Vetor b\n");
     for(int i=0; i<arg->dados.tamLinhas; i++)
@@ -123,34 +156,37 @@ void printandoDados(sistLinear* arg){
     printf("Resultado do vetor X com %d iteracoes\n", arg->P);
     for(int i=0; i<arg->dados.tamLinhas; i++)
         printf("x[%d]: %f\n", i, arg->dados.x[i]);
-    //printf("\n");
+    printf("\n");
 }
 
 //===========================================================================
 
 
-//melhorar//talvez tenha algum erro
-void* JacobiThread(void* arg){
-    infoThread info = (*(infoThread*) arg);
+//melhorar//talvez tenha algum erro 
+void* JacobiThread(void* arg){ 
+    infoThread info = (*(infoThread*) arg); 
     int i = info.numJacobi; 
-    while(info.sistema->k < info.sistema->P){ 
-        //------------------------------------------------------
-        int somatorio_a_x = 0;
-        for(int j=0; j<info.sistema->dados.tamLinhas; j++){
-            if(j!=i) somatorio_a_x += info.sistema->dados.A[i][j] * info.sistema->dados.x[i]; ///----------------*
-        }
-        info.sistema->dados.xAux[i] = 1/info.sistema->dados.A[i][i] * info.sistema->dados.b[i] - somatorio_a_x; ///------------*
-        pthread_barrier_wait(&barreiraCalculo);
-        pthread_barrier_wait(&barreiraEscrita);
-        //------------------------------------------------------ 
-    }
+    while(info.k < info.sistema->P){ 
+        //----------------------------------------------------------------- 
+        float somatorio_a_x = 0; 
+        for(int j=0; j<info.sistema->dados.tamLinhas; j++){ 
+            if(j!=i) somatorio_a_x += info.sistema->dados.A[i][j] * info.sistema->dados.x[j];
+        } 
+        info.sistema->dados.xAux[i] = (1/info.sistema->dados.A[i][i]) * 
+                                        (info.sistema->dados.b[i] - somatorio_a_x); 
+        
+        pthread_barrier_wait(&barreiraCalculo); 
+        pthread_barrier_wait(&barreiraEscrita); 
+        info.k++; 
+        //----------------------------------------------------------------- 
+    } 
     pthread_exit(NULL);
 }
 
 
+
 int main(){
     sistLinear matrizes;
-
     recebendoDados(&matrizes);
 
     pthread_barrier_init(&barreiraCalculo, NULL, matrizes.dados.tamLinhas+1);
@@ -160,20 +196,22 @@ int main(){
     pthread_t threads[matrizes.dados.tamLinhas]; 
     infoThread info[matrizes.dados.tamLinhas]; 
     for(int i=0; i<matrizes.dados.tamLinhas; i++){ 
+        info[i].k=0;
         info[i].id = i; 
-        info[i].numJacobi = i;
-        info[i].sistema = &matrizes;
-        pthread_create(&threads[i], NULL, JacobiThread, (void*) &info[i]);
-    }
+        info[i].numJacobi = i; 
+        info[i].sistema = &matrizes; 
+        pthread_create(&threads[i], NULL, JacobiThread, (void*) &info[i]); 
+    } 
 
-    //atualizando o vetor x e o k
-    while(matrizes.k < matrizes.P){
-        pthread_barrier_wait(&barreiraCalculo);
-        //passando todas as mudanças
-        for(int i=0; i<matrizes.dados.tamLinhas; i++)
-            matrizes.dados.x[i] = matrizes.dados.xAux[i];
-        matrizes.k++;
-        pthread_barrier_wait(&barreiraEscrita);
+    //atualizando o vetor x e o k 
+    int k=0; 
+    while(k < matrizes.P){ 
+        pthread_barrier_wait(&barreiraCalculo); 
+        //passando todas as mudanças 
+        for(int i=0; i<matrizes.dados.tamLinhas; i++) 
+            matrizes.dados.x[i] = matrizes.dados.xAux[i]; 
+        pthread_barrier_wait(&barreiraEscrita); 
+        k++; 
     }
 
     //liberando barreira
