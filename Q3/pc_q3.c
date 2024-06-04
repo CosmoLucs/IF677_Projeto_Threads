@@ -36,6 +36,7 @@ typedef struct InfoThread{
     int Nclients;
     int Ncontas;
     char** arqCliente;
+    Pedidos* pedidosNovos;
 } InfoThread;
 
 typedef struct InfoThreadBanco{
@@ -48,12 +49,13 @@ Pedidos listaPedidos[PEDIDOS_SIZE];
 int items = 0;
 int first = 0;
 int last = 0;
+
 int ClientesTerminaram=0;
 
 //===========================================================================
 
-pthread_barrier_t barreira;
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER; 
+pthread_mutex_t mutexLista = PTHREAD_MUTEX_INITIALIZER; 
+pthread_mutex_t mutexSomar = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutexPrint = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t empty = PTHREAD_COND_INITIALIZER; 
 pthread_cond_t fill = PTHREAD_COND_INITIALIZER; 
@@ -61,7 +63,7 @@ pthread_cond_t fill = PTHREAD_COND_INITIALIZER;
 //===========================================================================
 
 void put(Pedidos newPedido); //para o produtor
-Pedidos* get(InfoThreadBanco* info); //para o consumidor
+Pedidos* get(Pedidos* result, InfoThreadBanco* info); //para o consumidor
 
 void *producerClientes(void* arg); //o numero de clientes
 void *consumerBanco(void* arg); //apenas um
@@ -74,7 +76,7 @@ void pedidoPrint(int id, Pedidos* ped);
 int main(){
     fileThings* infoClientes = abreArquivo();
 
-    //arrumando a variavel Global listaPedidos
+    //arrumando o array Global listaPedidos
     for(int i=0; i<PEDIDOS_SIZE; i++){
         listaPedidos[i].OP=0;
         listaPedidos[i].valid=false;
@@ -83,13 +85,21 @@ int main(){
         listaPedidos[i].Zerada->money = 0;
     }
 
-    pthread_barrier_init(&barreira, NULL, infoClientes->Ncliente+2);
-
     pthread_t producer_threads[infoClientes->Ncliente];
     pthread_t consumer_thread;
 
     InfoThread* prod_infos = (InfoThread*)malloc(sizeof(InfoThread)*infoClientes->Ncliente);
     InfoThreadBanco* cons_info = (InfoThreadBanco*)malloc(sizeof(InfoThreadBanco));
+
+    //consumidor
+    cons_info->Nclients = infoClientes->Ncliente; 
+    cons_info->Ncontas = infoClientes->Ncontas;
+    cons_info->contas = (Conta*)malloc(sizeof(Conta)*infoClientes->Ncontas); 
+    for(int i=0; i<cons_info->Ncontas; i++){
+        cons_info->contas[i].id = i; 
+        cons_info->contas[i].money = MONEY_INICIAL; 
+    }
+    pthread_create(&consumer_thread, NULL, consumerBanco, (void*) &cons_info);
 
     //produtores
     for(int i=0; i<infoClientes->Ncliente; i++){
@@ -100,29 +110,22 @@ int main(){
         pthread_create(&producer_threads[i], NULL, producerClientes, (void*)&prod_infos[i]);
     }
 
-    //consumidor
-    cons_info->Nclients = infoClientes->Ncliente; 
-    cons_info->Ncontas = infoClientes->Ncontas;
-    cons_info->contas = (Conta*)malloc(sizeof(Conta)*infoClientes->Ncontas); 
-    for(int i=0; i<cons_info->Ncontas; i++){
-        cons_info->contas[i].id = i; 
-        cons_info->contas[i].money = MONEY_INICIAL;
-    }
-    pthread_create(&consumer_thread, NULL, consumerBanco, (void*) &cons_info);
-
-    //esperando as threads acabarem
-    pthread_barrier_wait(&barreira);
-    pthread_barrier_destroy(&barreira);
+    pthread_join(consumer_thread, NULL);
+    for(int i=0; i<infoClientes->Ncliente; i++)
+        pthread_join(producer_threads[i], NULL);
 
     //desalocando
-    for(int i=0; i<infoClientes->Ncliente; i++)
+    for(int i=0; i<infoClientes->Ncliente; i++){
+        free(prod_infos[i].pedidosNovos);
         free(infoClientes->arqDosClientes[i]);
-    free(infoClientes->arqDosClientes);
-    free(cons_info->contas);
+    } 
+    free(infoClientes->arqDosClientes); 
+    free(cons_info->contas); 
     free(cons_info);
     free(prod_infos);
     for(int i=0; i<PEDIDOS_SIZE; i++)
         free(listaPedidos[i].Zerada);
+    free(infoClientes);
 
     pthread_exit(NULL);
 }
@@ -149,18 +152,16 @@ fileThings* abreArquivo(){
 }
 
 void pedidoPrint(int id, Pedidos* ped){
-    pthread_mutex_lock(&mutexPrint);
     printf("Pedido %d\n", id);
     printf("\tOperacao %d, Valido %d\n", ped->OP, ped->valid);
     printf("\tConta %d: R$%d\n", ped->Zerada->id, ped->Zerada->money);
-    pthread_mutex_unlock(&mutexPrint);
 }
 
 //===========================================================================
 
 void *producerClientes(void* arg){
     /*Cada thread irá pegar as informações de seus arquivos 
-    e tentar colocar cada pedido na listaPedidos por meio da função put(i)*/
+    e tentar colocar cada pedido na listaPedidos por meio da função put(...)*/
     InfoThread* info = ((InfoThread*) arg); 
     pthread_mutex_lock(&mutexPrint);
     printf("Cliente %d: %s\n", info->tid, (*info->arqCliente)); 
@@ -173,58 +174,60 @@ void *producerClientes(void* arg){
         pthread_exit(NULL);
     }
 
-    int buffer; 
-    Pedidos pedidoNovo; 
-    pedidoNovo.Zerada = (Conta*)malloc(sizeof(Conta));
+    int buffer=0; 
+    int qtdSolicitacoes=0;
+    info->pedidosNovos = NULL;
     // printf("Qual operação deseja Realizar?\n1...Depósito\n2...Saque\n3...Consulta de Saldo\n");
     while(fscanf(arq, " %d", &buffer) != EOF){
+        info->pedidosNovos = (Pedidos*)realloc(info->pedidosNovos, sizeof(Pedidos)*(qtdSolicitacoes+1));; 
+        info->pedidosNovos[qtdSolicitacoes].Zerada = (Conta*)malloc(sizeof(Conta));
         //o primeiro valor eh a operação
-        pedidoNovo.OP = buffer;
-        pedidoNovo.valid = false; 
+        info->pedidosNovos[qtdSolicitacoes].OP = buffer;
+        info->pedidosNovos[qtdSolicitacoes].valid = false; 
         // printf("Qual o id da conta que você quer acessar?\n");
         fscanf(arq, " %d", &buffer);
-        pedidoNovo.Zerada->id = buffer; 
-        switch (pedidoNovo.OP){
+        info->pedidosNovos[qtdSolicitacoes].Zerada->id = buffer; 
+        switch (info->pedidosNovos[qtdSolicitacoes].OP){
             case 1: 
                 // printf("Quanto Deseja depositar?\n"); 
-                fscanf(arq, " %d", &pedidoNovo.Zerada->money);
+                fscanf(arq, " %d", &info->pedidosNovos[qtdSolicitacoes].Zerada->money);
                 if(buffer < info->Nclients){ 
-                    pedidoNovo.valid = 1; 
+                    info->pedidosNovos[qtdSolicitacoes].valid = 1; 
                 } else { 
-                    pedidoNovo.valid = 0; 
+                    info->pedidosNovos[qtdSolicitacoes].valid = 0; 
                     // printf("Esse não é um número de conta válido\n"); 
                 }
                 break;
             case 2: 
                 // printf("Quanto Deseja Sacar?\n");
-                fscanf(arq, " %d", &pedidoNovo.Zerada->money);
+                fscanf(arq, " %d", &info->pedidosNovos[qtdSolicitacoes].Zerada->money);
                 if(buffer < info->Nclients){
-                    pedidoNovo.valid = 1;
+                    info->pedidosNovos[qtdSolicitacoes].valid = 1;
                 } else {
-                    pedidoNovo.valid = 0;
+                    info->pedidosNovos[qtdSolicitacoes].valid = 0;
                     // printf("Esse não é um número de conta válido\n"); 
                 }
                 break;
             case 3:
-                pedidoNovo.Zerada->money = 0;
+                info->pedidosNovos[qtdSolicitacoes].Zerada->money = 0;
                 if(buffer < info->Nclients){
-                    pedidoNovo.valid = 1;
+                    info->pedidosNovos[qtdSolicitacoes].valid = 1;
                 } else {
-                    pedidoNovo.valid = 0;
+                    info->pedidosNovos[qtdSolicitacoes].valid = 0;
                     // printf("Esse não é um número de conta válido\n"); 
                 }
                 break;
             default: 
-                pedidoNovo.valid = 0;
+                info->pedidosNovos[qtdSolicitacoes].valid = 0;
                 // printf("Não é um número válido, tente novamente\n");
                 break;
         }
         //poe na lista de Pedidos
-        pedidoPrint(info->tid, &pedidoNovo);
-        put(pedidoNovo);
+        //pedidoPrint(info->tid, &info->pedidosNovos[qtdSolicitacoes]);
+        put(info->pedidosNovos[qtdSolicitacoes]);
+        qtdSolicitacoes++;
     }
     
-    free(pedidoNovo.Zerada);
     fclose(arq);
     ClientesTerminaram++;
 
@@ -232,16 +235,15 @@ void *producerClientes(void* arg){
     printf("Cliente %i terminou\n", info->tid);
     pthread_mutex_unlock(&mutexPrint);
 
-    pthread_barrier_wait(&barreira);
     pthread_exit(NULL);
 }
 
 //===========================================================================
 
 void put(Pedidos newPedido){
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&mutexLista);
     while(items == PEDIDOS_SIZE) {
-        pthread_cond_wait(&empty, &mutex);
+        pthread_cond_wait(&empty, &mutexLista);
     }
 
     //colocar pedidos dos clientes
@@ -253,11 +255,9 @@ void put(Pedidos newPedido){
     items++; 
     last++;
     if(last==PEDIDOS_SIZE) { last = 0; } 
-    if(items == 1) { 
-        pthread_cond_signal(&fill); 
-    }
+    if(items == 1) { pthread_cond_signal(&fill); }
     
-    pthread_mutex_unlock(&mutex); 
+    pthread_mutex_unlock(&mutexLista); 
 }
 
 //===========================================================================
@@ -266,73 +266,72 @@ void *consumerBanco(void* arg){
     InfoThreadBanco* info = (InfoThreadBanco*) arg;
     /*Essa thread irá pegar os pedidos, 
     realizá-los e tirá-los da listaPedidos*/
-    Pedidos* v;
+
+    Pedidos* v = (Pedidos*)malloc(sizeof(Pedidos));
+    v->Zerada = (Conta*) malloc(sizeof(Conta));
+
     int id=0;
     pthread_mutex_lock(&mutexPrint);
     printf("Banco iniciou \n");
     pthread_mutex_unlock(&mutexPrint);
-    //vai consumir até que os clientes nao tenham mais nada para pedir
+
+    //vai consumir até que os clientes nao tenham mais nada para pedir 
     bool end = false;
-    while(!end){
-        v = get(info);
-        pedidoPrint(id, v);
+    do{
+        v = get(v, info);
         id = v->Zerada->id;
         pthread_mutex_lock(&mutexPrint);
         printf("Conta %d :", id); 
-        if(v->valid) { 
-            switch (v->OP) {
-                { 
-                case 1:
-                    info->contas[id].money += v->Zerada->money; 
-                    printf("Deposito Realizado\n");
-                    break; 
-                case 2: 
-                    if(v->Zerada->money > info->contas[id].money) 
-                        printf("Saldo insuficiente para Saque\n"); 
-                    else {
-                        info->contas[id].money -= v->Zerada->money; 
-                        printf("Saque Realizado\n"); 
-                    }
-                    break;
-                case 3:
-                    printf("R$%d disponíveis\n", info->contas[id].money);
-                    break;
-                default: {}          
-                break;
-                }
-            }
-        } 
-        else {
+        if(!v->valid) { 
             printf("Operação não realizada, informação não são válidas...\n");
         }
-
+        else if(v->OP==1) {
+            info->contas[id].money += v->Zerada->money; 
+            printf("Deposito de R$%d Realizado\n", v->Zerada->money);
+        }
+        else if(v->OP==2){
+            if(v->Zerada->money > info->contas[id].money) 
+                printf("Saldo insuficiente para Saque\n"); 
+            else {
+                info->contas[id].money -= v->Zerada->money; 
+                printf("Saque de R$%d Realizado\n", v->Zerada->money); 
+            }
+        }
+        else if(v->OP==3){
+            printf("R$%d disponíveis\n", info->contas[id].money);
+        }
         printf("Banco realizou a opearação\n");
-        free(v->Zerada);
-        free(v);
+        pedidoPrint(id, v);
         pthread_mutex_unlock(&mutexPrint);
-        end = (ClientesTerminaram < info->Nclients) ? false : true;
-    }
+    
+        /*enquanto ainda houver clientes para receber pedidos 
+            ou tiver pedidos na lista 
+            o consumidor continua*/ 
+        if(ClientesTerminaram<info->Nclients || items > 0) end = false;
+        else end = true;
+
+    } while( !end );
+
+    free(v->Zerada);
+    free(v);
 
     pthread_mutex_lock(&mutexPrint);
     printf("Banco terminou \n");
     pthread_mutex_unlock(&mutexPrint);
 
-    pthread_barrier_wait(&barreira);
     pthread_exit(NULL);
 }
 
 //===========================================================================
 
-Pedidos* get(InfoThreadBanco* info) {
-    pthread_mutex_lock(&mutex); 
+Pedidos* get(Pedidos* result, InfoThreadBanco* info) {
+    pthread_mutex_lock(&mutexLista); 
     while(items == 0){  
-        pthread_cond_wait(&fill, &mutex); 
+        pthread_cond_wait(&fill, &mutexLista); 
     }
 
     //realizar pedidos dos clientes
-    Pedidos* result = (Pedidos*) malloc(sizeof(Pedidos));
     (*result) = listaPedidos[first];
-    (*result).Zerada = (Conta*) malloc(sizeof(Conta));
     (*(*result).Zerada) = (*listaPedidos[first].Zerada);
 
     //  printf("pos %d: ", first);
@@ -340,11 +339,9 @@ Pedidos* get(InfoThreadBanco* info) {
     first++; 
     
     if(first==PEDIDOS_SIZE) { first = 0; }
-    if(items == PEDIDOS_SIZE - 1){ 
-        pthread_cond_broadcast(&empty); 
-    }
+    if(items == PEDIDOS_SIZE - 1){ pthread_cond_broadcast(&empty); }
     
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&mutexLista);
     //terminou a tarefa
     return result;
 }
