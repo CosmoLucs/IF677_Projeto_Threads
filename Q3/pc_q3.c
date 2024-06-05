@@ -33,9 +33,7 @@ typedef struct fileThings{
 
 typedef struct InfoThread{
     int tid;
-    int Nclients;
-    int Ncontas;
-    char** arqCliente;
+    fileThings dadosClientes;
     Pedidos* pedidosNovos;
 } InfoThread;
 
@@ -43,9 +41,45 @@ typedef struct InfoThreadBanco{
     int Nclients;
     int Ncontas;
     Conta* contas;
+    List* listaPedidos;
 } InfoThreadBanco;
 
-Pedidos listaPedidos[PEDIDOS_SIZE];
+//===========================================================================
+
+typedef Pedidos E; 
+typedef unsigned int SemSinal; 
+
+typedef struct Node{
+    E element;
+    Node* next;
+}Node;
+
+typedef struct List{
+    Node* head;
+    Node* tail;
+    SemSinal cnt;
+} List;
+
+//===========================================================================
+
+Node* create_node(E it, Node* nextval);
+List* create_LinkedList();
+void distructor_LinkedList(List* l);
+
+void clearLinkedList(List* l);
+void appendLinkedList(List* l, E item);
+E removeLinkedList(List* l);
+
+E getValueLinkedList(List* l);
+
+//===========================================================================
+//===========================================================================
+
+pthread_mutex_t mutexLista = PTHREAD_MUTEX_INITIALIZER; 
+pthread_mutex_t mutexPrint = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t empty = PTHREAD_COND_INITIALIZER; 
+pthread_cond_t fill = PTHREAD_COND_INITIALIZER; 
+
 int items = 0;
 int first = 0;
 int last = 0;
@@ -54,15 +88,7 @@ int ClientesTerminaram=0;
 
 //===========================================================================
 
-pthread_mutex_t mutexLista = PTHREAD_MUTEX_INITIALIZER; 
-pthread_mutex_t mutexSomar = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutexPrint = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t empty = PTHREAD_COND_INITIALIZER; 
-pthread_cond_t fill = PTHREAD_COND_INITIALIZER; 
-
-//===========================================================================
-
-void put(Pedidos newPedido); //para o produtor
+void put(List* l, Pedidos newPedido); //para o produtor
 Pedidos* get(Pedidos* result, InfoThreadBanco* info); //para o consumidor
 
 void *producerClientes(void* arg); //o numero de clientes
@@ -72,18 +98,13 @@ fileThings* abreArquivo();
 void pedidoPrint(int id, Pedidos* ped);
 
 //===========================================================================
+//===========================================================================
 
 int main(){
     fileThings* infoClientes = abreArquivo();
 
     //arrumando o array Global listaPedidos
-    for(int i=0; i<PEDIDOS_SIZE; i++){
-        listaPedidos[i].OP=0;
-        listaPedidos[i].valid=false;
-        listaPedidos[i].Zerada = (Conta*)malloc(sizeof(Conta));
-        listaPedidos[i].Zerada->id = 0;
-        listaPedidos[i].Zerada->money = 0;
-    }
+    List* listaPedidos = create_LinkedList();
 
     pthread_t producer_threads[infoClientes->Ncliente];
     pthread_t consumer_thread;
@@ -94,6 +115,7 @@ int main(){
     //consumidor
     cons_info->Nclients = infoClientes->Ncliente; 
     cons_info->Ncontas = infoClientes->Ncontas;
+    cons_info->listaPedidos = listaPedidos;
     cons_info->contas = (Conta*)malloc(sizeof(Conta)*infoClientes->Ncontas); 
     for(int i=0; i<cons_info->Ncontas; i++){
         cons_info->contas[i].id = i; 
@@ -104,9 +126,9 @@ int main(){
     //produtores
     for(int i=0; i<infoClientes->Ncliente; i++){
         prod_infos[i].tid = i; 
-        prod_infos[i].Nclients = infoClientes->Ncliente; 
-        prod_infos[i].Ncontas = infoClientes->Ncontas; 
-        prod_infos[i].arqCliente = &infoClientes->arqDosClientes[i]; 
+        prod_infos[i].dadosClientes.Ncliente = infoClientes->Ncliente; 
+        prod_infos[i].dadosClientes.Ncontas = infoClientes->Ncontas; 
+        prod_infos[i].dadosClientes.arqDosClientes = &infoClientes->arqDosClientes[i]; 
         pthread_create(&producer_threads[i], NULL, producerClientes, (void*)&prod_infos[i]);
     }
 
@@ -116,20 +138,19 @@ int main(){
 
     //desalocando
     for(int i=0; i<infoClientes->Ncliente; i++){
-        free(prod_infos[i].pedidosNovos);
         free(infoClientes->arqDosClientes[i]);
     } 
     free(infoClientes->arqDosClientes); 
     free(cons_info->contas); 
-    free(cons_info);
-    free(prod_infos);
-    for(int i=0; i<PEDIDOS_SIZE; i++)
-        free(listaPedidos[i].Zerada);
+    free(cons_info); 
+    free(prod_infos); 
+    distructor_LinkedList(listaPedidos);
     free(infoClientes);
 
     pthread_exit(NULL);
 }
 
+//===========================================================================
 //===========================================================================
 
 fileThings* abreArquivo(){
@@ -150,7 +171,6 @@ fileThings* abreArquivo(){
     fclose(arqEntrada);
     return arqCoisas;
 }
-
 void pedidoPrint(int id, Pedidos* ped){
     printf("Pedido %d\n", id);
     printf("\tOperacao %d, Valido %d\n", ped->OP, ped->valid);
@@ -164,10 +184,10 @@ void *producerClientes(void* arg){
     e tentar colocar cada pedido na listaPedidos por meio da função put(...)*/
     InfoThread* info = ((InfoThread*) arg); 
     pthread_mutex_lock(&mutexPrint);
-    printf("Cliente %d: %s\n", info->tid, (*info->arqCliente)); 
+    printf("Cliente %d: %s\n", info->tid, (*info->dadosClientes.arqDosClientes)); 
     pthread_mutex_unlock(&mutexPrint);
 
-    FILE* arq = fopen((*info->arqCliente), "r");
+    FILE* arq = fopen((*info->dadosClientes.arqDosClientes), "r");
     //nao conseguiu abrir o arquivo
     if(arq == NULL) { 
         ClientesTerminaram++;
@@ -191,7 +211,7 @@ void *producerClientes(void* arg){
             case 1: 
                 // printf("Quanto Deseja depositar?\n"); 
                 fscanf(arq, " %d", &info->pedidosNovos[qtdSolicitacoes].Zerada->money);
-                if(buffer < info->Nclients){ 
+                if(buffer < info->dadosClientes.Ncliente){ 
                     info->pedidosNovos[qtdSolicitacoes].valid = 1; 
                 } else { 
                     info->pedidosNovos[qtdSolicitacoes].valid = 0; 
@@ -201,7 +221,7 @@ void *producerClientes(void* arg){
             case 2: 
                 // printf("Quanto Deseja Sacar?\n");
                 fscanf(arq, " %d", &info->pedidosNovos[qtdSolicitacoes].Zerada->money);
-                if(buffer < info->Nclients){
+                if(buffer < info->dadosClientes.Ncliente){
                     info->pedidosNovos[qtdSolicitacoes].valid = 1;
                 } else {
                     info->pedidosNovos[qtdSolicitacoes].valid = 0;
@@ -210,7 +230,7 @@ void *producerClientes(void* arg){
                 break;
             case 3:
                 info->pedidosNovos[qtdSolicitacoes].Zerada->money = 0;
-                if(buffer < info->Nclients){
+                if(buffer < info->dadosClientes.Ncliente){
                     info->pedidosNovos[qtdSolicitacoes].valid = 1;
                 } else {
                     info->pedidosNovos[qtdSolicitacoes].valid = 0;
@@ -237,10 +257,7 @@ void *producerClientes(void* arg){
 
     pthread_exit(NULL);
 }
-
-//===========================================================================
-
-void put(Pedidos newPedido){
+void put(List* l,Pedidos newPedido){
     pthread_mutex_lock(&mutexLista);
     while(items == PEDIDOS_SIZE) {
         pthread_cond_wait(&empty, &mutexLista);
@@ -253,9 +270,9 @@ void put(Pedidos newPedido){
     //printf("pos %d: ", last);
 
     items++; 
-    last++;
-    if(last==PEDIDOS_SIZE) { last = 0; } 
-    if(items == 1) { pthread_cond_signal(&fill); }
+    // last++;
+    // if(last==PEDIDOS_SIZE) { last = 0; } 
+    if(items == 1) { pthread_cond_signal(&fill); } 
     
     pthread_mutex_unlock(&mutexLista); 
 }
@@ -321,9 +338,6 @@ void *consumerBanco(void* arg){
 
     pthread_exit(NULL);
 }
-
-//===========================================================================
-
 Pedidos* get(Pedidos* result, InfoThreadBanco* info) {
     pthread_mutex_lock(&mutexLista); 
     while(items == 0){  
@@ -344,6 +358,77 @@ Pedidos* get(Pedidos* result, InfoThreadBanco* info) {
     pthread_mutex_unlock(&mutexLista);
     //terminou a tarefa
     return result;
+}
+
+//===========================================================================
+//===========================================================================
+
+Node* create_node(E it, Node* nextval){
+    Node* n = (Node*) malloc(sizeof(Node)); 
+    n->element = it;
+    n->next = nextval;
+    return n;
+}
+List* create_LinkedList(){
+    Node* n = (Node*) malloc(sizeof(Node));
+    n->next = NULL;
+    List* l = (List*) malloc(sizeof(Node));
+    l->tail = l->head = n;
+    l->cnt = 0;
+    return l;
+}
+void distructor_LinkedList(List* l){
+    clearLinkedList(l); 
+    free(l->head); 
+    free(l); 
+}
+
+void clearLinkedList(List* l){
+    moveToStartLinkedList(l);
+    Node* tempNext = l->head->next;
+    while(tempNext != NULL){
+        Node* removed = tempNext;
+        tempNext = tempNext->next;
+        free(tempNext);
+    }
+    free(l->tail);
+    free(l->head);
+    free(l);
+    l = create_LinkedList();
+}
+void appendLinkedList(List* l, E item){
+    Node* n = create_node(item, NULL);
+    l->tail->next = n;
+    l->tail = n;
+    l->cnt++;
+}
+E removeLinkedList(List* l){
+    if(l->head->next == NULL) { 
+        //printf("It is not possible hahaha\n"); 
+        E resto = (E) {0,0,NULL};
+        // resto.OP = 0;
+        // resto.valid = 0;
+        // resto.Zerada = NULL;
+        return resto; 
+    }
+    E removed = l->head->next->element;
+    Node* temp = l->head->next;
+
+    if(l->tail == l->head->next) l->tail = l->head;
+    l->head->next = l->head->next->next; 
+    free(temp);
+    l->cnt--;
+    return removed;
+}
+
+E getValueLinkedList(List* l){
+    if(l->head->next != NULL)
+        return l->head->next->element;
+    E resto = (E) {0,0,NULL};
+    // resto.OP = 0;
+    // resto.valid = 0;
+    // resto.Zerada = NULL;
+    return resto;
 }
 
 //===========================================================================
