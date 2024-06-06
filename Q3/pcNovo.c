@@ -64,7 +64,7 @@ typedef struct InfoBanco{
 //recurso para variavel p
 pthread_mutex_t mutexPedidos = PTHREAD_MUTEX_INITIALIZER;
 //recurso da variavel ClientesTerminaram
-pthread_mutex_t mutexSomar = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutexTermino = PTHREAD_MUTEX_INITIALIZER;
 //recurso da fila de pedidos
 pthread_mutex_t mutexLista = PTHREAD_MUTEX_INITIALIZER; 
 //recurso de printar no terminal
@@ -81,6 +81,7 @@ Queue* fila = NULL;
 Conta* contas = NULL;
 
 //indica a quantidade de pedidos feitos
+int pTotal=0;
 int p=0;
 //indica quantos clientes terminaram suas solicitações
 int ClientesTerminaram=0;
@@ -137,16 +138,15 @@ int main(){
     //--------------------------------------------------------
 
     for(i=0; i<infoGeral->Ncliente; i++){
-        pthread_create(&proThread[i], NULL, producerClientes, (void*)&proInfo[i]);
+        pthread_create(&proThread[i], NULL, producerClientes, (void*) &proInfo[i]);
     }
 
-    pthread_create(&coThread, NULL, consumerBanco, (void*)&coInfo);
-
+    for(i=0; i<infoGeral->Ncliente; i++){
+        pthread_join(proThread[i], NULL);
+    }
     //--------------------------------------------------------
 
-    for(i=0; i<infoGeral->Ncliente; i++)
-        pthread_join(proThread[i], NULL);
-    
+    pthread_create(&coThread, NULL, consumerBanco, (void*) &coInfo);
     pthread_join(coThread, NULL);
 
     //---------------------------------------------------------
@@ -175,8 +175,7 @@ fileThings* abreArquivo(){
     FILE* arqEntrada = fopen("pc_q3entrada.txt","r");
     if(arqEntrada == NULL) exit(1);
     
-    fscanf(arqEntrada, " %d", &arqCoisas->Ncontas);
-    fscanf(arqEntrada, " %d", &arqCoisas->Ncliente);
+    fscanf(arqEntrada, " %d %d", &arqCoisas->Ncontas, &arqCoisas->Ncliente);
 
     arqCoisas->nomes = (char**) malloc(sizeof(char*)*arqCoisas->Ncliente);
 
@@ -193,9 +192,6 @@ void pedidoPrint(char* nome, int id, Pedidos* ped){
     printf("\t\tOperacao %d, Valido %d\n", ped->OP, ped->valid);
     printf("\t\tConta %d: R$%d\n", ped->id, ped->money);
 }
-void debugCoisas(void* arg){
-    printf("- Info 1: %d\n", (int)arg);
-}
 
 //=============================================================
 
@@ -208,15 +204,16 @@ void* producerClientes(void* arg){
     FILE* arq = fopen((*info->dataC.nomes), "r");
     //nao conseguiu abrir o arquivo
     if(arq == NULL) { 
-        pthread_mutex_lock(&mutexSomar);
+        pthread_mutex_lock(&mutexTermino); 
         ClientesTerminaram++; 
-        pthread_mutex_unlock(&mutexSomar);
+        pthread_mutex_unlock(&mutexTermino); 
         pthread_exit(NULL);
     }
 
     //limitar a leitura do arquivo
     int qtd=0;
     fscanf(arq, " %d", &qtd);
+    //calcular o total de Pedidos
     pthread_mutex_lock(&mutexPedidos);
     p+=qtd;
     pthread_mutex_unlock(&mutexPedidos);
@@ -240,11 +237,11 @@ void* producerClientes(void* arg){
     }
 
     fclose(arq);
-    //para que os produtores nao somem sobrepondo
-    pthread_mutex_lock(&mutexSomar);
-    ClientesTerminaram++;
-    pthread_mutex_unlock(&mutexSomar);
 
+    //para que os produtores nao somem sobrepondo
+    pthread_mutex_lock(&mutexTermino);
+    ClientesTerminaram++;
+    pthread_mutex_unlock(&mutexTermino);
 
     pthread_mutex_lock(&mutexPrint);
     printf("Cliente %d terminou\n", info->tid);
@@ -271,24 +268,23 @@ void put(Pedidos newPedido){
 
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //nao está terminando//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-//esta terminando sem entrar no while (antes que os produtores tenham feito algo)
-void* consumerBanco(void* arg){
+void* consumerBanco(void* arg){ 
     InfoBanco* info = ((InfoBanco*) arg);
 
-    int id=0;
-    pthread_mutex_lock(&mutexPrint);
-    printf("Banco iniciou \n");
-    pthread_mutex_unlock(&mutexPrint);
+    int id=0; 
+    pthread_mutex_lock(&mutexPrint); 
+    printf("Banco iniciou \n"); 
+    pthread_mutex_unlock(&mutexPrint); 
 
-    /* enquanto ainda houver clientes para receber pedidos 
-        ou tiver pedidos na lista o consumidor continua */ 
+    pthread_mutex_lock(&mutexTermino);
+    bool certeza = (ClientesTerminaram < info->Ncliente);
+    pthread_mutex_unlock(&mutexTermino);
 
-    while((ClientesTerminaram < info->Ncliente || (fila->size) > 0)){
-        info->v = get(info);
-        id = info->v.id;
-        //mexendo na variavel global conta
-        if(!info->v.valid) { }
-        else {
+    while(certeza || (fila->size > 0)){
+        info->v = get(info); 
+        id = info->v.id; 
+        //mexendo na variavel global conta 
+        if(info->v.valid) {
             switch (info->v.OP)
             {
             case 1:
@@ -303,36 +299,45 @@ void* consumerBanco(void* arg){
             }
         }
 
-        //print das informacoes modificadas
+        //print das informacoes modificadas 
+        pthread_mutex_lock(&mutexPedidos);
+            int falta = p - pTotal;
+        pthread_mutex_unlock(&mutexPedidos);
         pthread_mutex_lock(&mutexPrint); 
-        printf("Banco realizou a opearação\n");
+        printf("Banco está realizando a opearação %d\nFaltam %d pedidos e %d clientes\n", 
+                pTotal+1, falta, info->Ncliente-ClientesTerminaram); 
+        pTotal++; 
         printf("\tConta %d :", id); 
         if(!info->v.valid) { 
             printf("Operação não realizada, informação não são válidas...\n");
-        }
-        else {
+        } 
+        else { 
             switch (info->v.OP)
-            {
-            case 1:
+            { 
+            case 1: 
                 printf("Deposito de R$%d Realizado\n", info->v.money);
                 break;
-            case 2:
+            case 2: 
                 if(info->v.money > contas[id].money) 
                     printf("Saldo insuficiente para Saque\n"); 
-                else {
+                else 
                     printf("Saque de R$%d Realizado\n", info->v.money); 
-                }
                 break;
-            case 3:
+            case 3: 
                 printf("R$%d disponíveis\n", contas[id].money);
                 break;
             default:
-                //
                 break;
             }
         }
-        pedidoPrint("Pedido", id, &info->v);
-        pthread_mutex_unlock(&mutexPrint);
+        pedidoPrint("Pedido", id, &info->v); 
+        pthread_mutex_unlock(&mutexPrint); 
+
+        //verificar se ainda precisa 
+        pthread_mutex_lock(&mutexTermino); 
+        if(ClientesTerminaram < info->Ncliente) certeza = true; 
+        else certeza = false; 
+        pthread_mutex_unlock(&mutexTermino); 
     }
     
     pthread_mutex_lock(&mutexPrint);
@@ -343,7 +348,6 @@ void* consumerBanco(void* arg){
 }
 
 Pedidos get(InfoBanco* info){
-    
     pthread_mutex_lock(&mutexLista);
     Pedidos result; result.valid = false;
 
@@ -354,7 +358,7 @@ Pedidos get(InfoBanco* info){
         pthread_cond_wait(&fill, &mutexLista);
     }
 
-    if(ClientesTerminaram < info->Ncliente || (fila->size)>0)
+    //if(ClientesTerminaram < info->Ncliente || (fila->size)>0)
         result = dequeue(fila);
 
     if((fila->size) == PEDIDOS_SIZE-1) { pthread_cond_broadcast(&empty); }
@@ -373,11 +377,9 @@ Node* create_node(Pedidos new, Node* nextval){
 
 Queue* create_queue(){
     Queue* q = (Queue*) malloc(sizeof(Queue));
+
     Pedidos r;
-    r.id = 0;
-    r.OP = 0;
-    r.money = 0;
-    r.valid = 0;
+    r.id = 0, r.OP = 0, r.money = 0, r.valid = 0;
 
     q->rear = create_node(r, NULL);
     q->front = q->rear;
