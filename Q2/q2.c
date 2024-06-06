@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <math.h>
 
-//mudança
 
 pthread_barrier_t barreira;
 
