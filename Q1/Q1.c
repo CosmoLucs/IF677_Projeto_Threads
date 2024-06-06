@@ -14,7 +14,7 @@ possuem a mesma formatação, cada linha possui um
 
 #define Tam_Max 100
 
-//A Struct irá carregar a palavra qu será procurada e o nome do arquivo
+//A Struct irá carregar a palavra que será procurada e o nome do arquivo
 struct Arquivo{
     char* SearchName;
     char* FileName;
@@ -63,11 +63,11 @@ int main() {
     printf("Digite a quantidade de arquivos que você deseja analisar:\n");
     scanf("%d", &FileQtd);
 
-    char *Pedro = (char*) malloc(sizeof(char)*Tam_Max); 
+    char *Keyword = (char*) malloc(sizeof(char)*Tam_Max); 
 
     struct Arquivo *ArqList[FileQtd];
     printf("Digite a palavra que você está procurando nos arquivos:\n");
-    scanf(" %[^\n]", Pedro); 
+    scanf(" %[^\n]", Keyword); 
 
 
     //colocando o nome buscado na struct
@@ -76,12 +76,12 @@ int main() {
         
         //Alocação inicial da struct
         ArqList[i] = (struct Arquivo*)malloc(sizeof(struct Arquivo) * FileQtd);
-        //Alocação de cada string.
-        ArqList[i]->SearchName = (char*) malloc(strlen(Pedro)+1);
+        //Alocação de cada string
+        ArqList[i]->SearchName = (char*) malloc(strlen(Keyword)+1);
         ArqList[i]->FileName = (char *) malloc(sizeof(char)*Tam_Max);
 
-        //Todas as instâncias da struct irão procurar pela mesma palavra.
-        strcpy(ArqList[i]->SearchName, Pedro);
+        //Todas as instâncias da struct irão procurar pela mesma palavra
+        strcpy(ArqList[i]->SearchName, Keyword);
 
         printf("Digite o nome de um arquivo(lembresse de adicionar '.txt' ao final):\n");
         scanf(" %[^\n]", ArqList[i]->FileName);
